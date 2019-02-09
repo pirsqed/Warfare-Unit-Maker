@@ -1,0 +1,466 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Warfare Unit Maker</title>
+  <meta name="description" content="Strongholds and Followers Warfare Unit Maker">
+  <meta name="author" content="pirsqed">
+
+  <!-- <link rel="stylesheet" href="css/styles.css?v=1.0"> -->
+
+</head>
+
+<body>
+	<!-- TODO: Move script to js folder -->
+	<!-- <script src="js/wum.js"></script> -->
+	<script>
+		//Each unit has ancestory, equipment, experience, type, and size
+        //A unit can also have traits, which they gain from their ancestory
+        //Or maybe buy them a la carte?
+		class ancestory {
+            constructor(name, atk, pow, def, tough, morale, traits){
+                this.type = 'ancestory';
+                this.name = name; //string
+                this.atk = atk; //int
+                this.pow = pow; //int
+                this.def = def; //int
+                this.tough = tough; //int
+                this.morale = morale; //int
+                this.traits = traits; //list of trait objects
+            }
+		}
+
+        class trait {
+            constructor(name, desc, cost){
+                this.type = 'trait';
+                this.name = name; //string
+                this.desc = desc; //string
+                this.cost = cost; //int
+            }
+        }
+
+        class alc_traits {
+            constructor(traits){
+                this.type = 'alc_traits';
+                this.traits = traits; //list of trait objects
+            }
+        }
+
+        class experience {
+            constructor(name, atk, pow, def, tough, morale){
+                this.type = 'experience';
+                this.name = name; //string
+                this.atk = atk; //int
+                this.pow = pow; //int
+                this.def = def; //int
+                this.tough = tough; //int
+                this.morale = morale; //int
+            }
+        }
+
+        class equipment {
+            constructor(name, atk, pow, def, tough, morale){
+                this.type = 'equipment';
+                this.name = name; //string
+                this.atk = atk; //int
+                this.pow = pow; //int
+                this.def = def; //int
+                this.tough = tough; //int
+                this.morale = morale; //int
+            }
+        }
+
+        class unit_type {
+            constructor(name, atk, pow, def, tough, morale, cost_multiplier, traits=[]){
+                this.type = 'unit_type';
+                this.name = name; //string
+                this.atk = atk; //int
+                this.pow = pow; //int
+                this.def = def; //int
+                this.tough = tough; //int
+                this.morale = morale; //int
+                this.traits = traits; //list of trait objects
+                this.cost_multiplier = cost_multiplier; //float
+            }
+        }
+
+        class size {
+            constructor(size, cost_multiplier){
+                this.type = 'size';
+                this.size = size;//int, 4, 6, 8, 10, 12, 20
+                this.cost_multiplier = cost_multiplier;
+            }
+        }
+
+        class unit {
+            constructor(name, ancestory, experience, equipment, unit_type, size, alc_traits=[], orders=[]){
+                this.name = name;
+                //Traits are usually only inherited from ancestory and
+                //unit type but doing it this way let's us support a la carte trait buying.
+                this.alc_traits = [];
+                //keeping a separate record of a la carte traits.
+                if (alc_traits.hasOwnProperty('traits')){
+                    this.alc_traits = alc_traits;
+                }
+                this.traits = this.alc_traits;
+                this.ancestory = ancestory;
+                this.traits = this.traits.concat(ancestory.traits);
+                this.experience = experience;
+                this.equipment = equipment;
+                this.unit_type = unit_type;
+                this.traits = this.traits.concat(unit_type.traits)
+                this.size = size;
+                this.orders = orders;
+                this.calcAttributes();
+                this.calcCost();
+            }
+
+            calcAttributes(){
+                this.atk = 0;
+                this.pow = 0;
+                this.def = 10;//def and toughness base is 10.
+                this.tough = 10;
+                this.morale = 0;
+                var aspects = ['ancestory', 'experience', 'equipment', 'unit_type'];
+                for (var i = 0; i < aspects.length; i++){
+                    var aspect = aspects[i];
+                    var stats = ['atk', 'pow', 'def', 'tough', 'morale'];
+                    for (var j = 0; j < stats.length; j++){
+                        var stat = stats[j];
+                        this[stat] += this[aspect][stat];
+                    }
+                }
+            }
+
+            calcCost(){
+                //these stats are calculated in calcAttributes(), and that
+                //should be called before calculating the cost.
+                this.base_stat_cost = 0;
+                this.base_stat_cost += this.atk;
+                this.base_stat_cost += this.pow;
+                this.base_stat_cost += this.def - 10;//def and toughness base is 10.
+                this.base_stat_cost += this.tough - 10;
+                this.base_stat_cost += this.morale * 2;
+
+
+                this.cost_multiplier = 1;
+                this.cost_multiplier *= this.unit_type.cost_multiplier
+                this.cost_multiplier *= this.size.cost_multiplier
+
+                var cost = this.base_stat_cost * this.cost_multiplier * 10;
+
+                this.trait_cost = 0;
+                var traits = this.traits;
+                if (traits.length > 0){
+                    for (var i = 0; i < traits.length; i++){
+                        var trait = traits[i];
+                        this.trait_cost += trait.cost;
+                    }
+                }
+
+                this.unit_cost = cost + this.trait_cost + 30;
+            }
+
+            replaceAspect(aspect){
+                //An aspect is ancestory, equipment, experience, unit_type, size, and alc_traits
+                var aspectType = aspect.type;
+                this[aspectType] = aspect;
+                //re-do traits. This is fast enough that I don't care if
+                //the new aspect has any traits or not.
+                if (aspect.type = 'alc_traits'){
+                    this.alc_traits = aspect.traits;
+                }
+                this.traits = [];
+                this.traits = this.traits.concat(this.alc_traits.traits);
+                this.traits = this.traits.concat(this.ancestory.traits);
+                this.traits = this.traits.concat(this.unit_type.traits);
+                this.calcAttributes();
+                this.calcCost();
+            }
+        }
+
+        //traits
+        var traits = {
+            //new trait(str,  str,  int),
+            //new trait(name, desc, cost),
+            amphibious: new trait('Amphibious', 'This unit does not suffer terrain penalties for fightinG in water or on land.', 50),
+            bred_for_war: new trait('Bread For War', 'This unit cannot be diminished, and cannot have disadvantage on Morale checks.', 100),
+            brutal: new trait('Brutal', 'This unit inflicts 2 casualites on a successful Power check.', 200),
+            charge: new trait('Charge', 'Cannot use while engaged. A Charge is an attack with advantage on the Attack check. It inflicts 2 casualties on a successful Power check. The charging unit is then engaged with the defending unit and must make a DC 13 Morale check to disengage.', 0),
+            courageous: new trait('Courageous', 'Once per battle, this unit can choose to succeed on a Morale check it just failed.', 50),
+            eternal: new trait('Eternal', 'This unit cannot be horrified, and it always succeeds on Morale checks to attack undead and fiends.', 50),
+            frenzy: new trait('Frenzy', 'If this unit diminishes an enemy unit, it immediately makes a free attack against that unit.', 50),
+            horrify: new trait('Horrify', 'If this unit inflicts a casualty on an enemy unit, that unit most make a DC 15 Morale check. Failure exhausts the unit.', 200),
+            levy: new trait('Levy', 'Levies are always diminished', 0),
+            martial: new trait('Martial', 'If this unit succeeds on a Power check and its size is greater than the defending unit, it inflicts 2 casualties.', 100),
+            mindless: new trait('Mindless', 'This unit cannot fail Morale checks.', 100),
+            regenerate: new trait('Regenerate', 'When this unit refreshes, increment its casualty die. This trait ceases to function if the unit suffers a casualty from battle magic.', 200),
+            ravenous: new trait('Ravenous', 'While any enemy unit is diminished, this unit can spend a round feeding on the corpses to increment their casualty die.', 50),
+            hurl_rocks: new trait('Hurl Rocks', 'If this unit succeeds on an Attack check, it inflicts 2 casualties. Against fortifications it inflicts 1d6 casualites.', 250),
+            savage: new trait('Savage', 'This unit has advantage on the first Attack check it makes each battle.', 50),
+            stalwart: new trait('Stalwart', 'Enemy battle magic has disadvantage on Power checks against this unit.', 50),
+            twisting_roots: new trait('Twisting Roots', 'As an action, this unit can sap the walls of a fortification. Seige units have advantage on Power checks against sapped fortifications', 200),
+            undead: new trait('Undead', 'Green and regular troops must pass a Morale check to attack this unit. Each enemy unit need only do this once.', 50),
+
+        }
+
+        //ancestories
+        var ancestories = {
+            //new ancestory(str,  int, int, int, int,   int,    array)
+            //new ancestory(name, atk, pow, def, tough, morale, traits)
+            bugbear: new ancestory('Bugbear', 2, 0, 0, 0, 1, [traits.martial]),
+            dragonborn: new ancestory('Dragonborn', 2, 2, 1, 1, 1, [traits.courageous]),
+            dwarf: new ancestory('Dwarf', 3, 1, 1, 1, 2, [traits.stalwart]),
+            elf: new ancestory('Elf', 2, 0, 0, 0, 1, [traits.eternal]),
+            elf_winged: new ancestory('Elf (Winged)', 1, 1, 0, 0, 1, [traits.eternal]),
+            ghoul: new ancestory('Ghoul', -1, 0, 2, 2, 0, [traits.undead,
+                                                    traits.horrify,
+                                                    traits.ravenous]),
+            gnoll: new ancestory('Gnoll', 2, 0, 0, 0, 1, [traits.frenzy]),
+            gnome: new ancestory('Gnome', 1, -1, 1, -1, +1, []),
+            goblin: new ancestory('Goblin', -1, -1, 1, -1, 0, []),
+            hobgoblin: new ancestory('Hobgoblin', 2, 0, 0, 0, 1, [traits.built_for_war,
+                                                        traits.martial]),
+            human: new ancestory('Human', 2, 0, 0, 0, 1, [traits.courageous]),
+            kobold: new ancestory('Kobold', -1, -1, 1, -1, -1, []),
+            lizardfolk: new ancestory('Lizardfolk', 2, 1, -1, 1, 1, [traits.amphibious]),
+            ogre: new ancestory('Ogre', 0, 2, 0, 2, 1, [traits.brutal]),
+            orc: new ancestory('Orc', 2, 1, 1, 1, 2, [traits.savage]),
+            skeleton: new ancestory('Skeleton', -2, -1, 1, 1, 1, [traits.undead,
+                                                        traits.mindless]),
+            treant: new ancestory('Treant', 0, 2, 0, 2, 0, [traits.siege_engine,
+                                                    traits.twisting_roots,
+                                                    traits.hurl_rocks]),
+            troll: new ancestory('Troll', 0, 2, 0, 2, 0, [traits.regenerate]),
+            zombie: new ancestory('Zombie', -2, 0, 2, 2, 2, [traits.undead,
+                                                    traits.mindless]),
+        };
+
+        var exp = {
+            //new experience(str,  int, int, int, int,   int)
+            //new experience(name, atk, pow, def, tough, morale)
+            green: new experience('Green', 0, 0, 0, 0, 0),
+            regular: new experience('Regular', 1, 0, 0, 1, 1),
+            seasoned: new experience('Seasoned', 1, 0, 0, 1, 2),
+            veteran: new experience('Veteran', 1, 0, 0, 1, 3),
+            elite: new experience('Elite', 2, 0, 0, 2, 4),
+            super_elite: new experience('Super-elite', 2, 0, 0, 2, 5),
+        }
+
+        var equip = {
+            //new equipment(str,  int, int, int, int,   int)
+            //new equipment(name, atk, pow, def, tough, morale)
+            none: new equipment('', 0, 0, 0, 0, 0),
+            light: new equipment('Light', 0, 1, 1, 0, 0),
+            medium: new equipment('Medium', 0, 2, 2, 0, 0),
+            heavy: new equipment('Heavy', 0, 4, 4, 0, 0),
+            super_heavy: new equipment('Super-heavy', 0, 6, 6, 0, 0),
+        }
+
+        var unit_types = {
+            levy: new unit_type('Levy', 0, 0, 0, 0, -1, 0.75, [traits.levy]),
+            flying: new unit_type('Flying', 0, 0, 0, 0, 3, 2.0, []),
+            archers: new unit_type('Archers', 0, 1, 0, 0, 1, 1.75, []),
+            cavalry: new unit_type('Cavalry', 1, 1, 0, 0, 2, 1.5, [traits.charge]),
+            infantry: new unit_type('Infantry', 0, 0, 1, 1, 0, 1.0, []),
+            seige_engine: new unit_type('Seige Engine', 1, 1, 0, 1, 0, 1.5, []),
+        }
+
+        var unit_sizes = {
+            d4: new size(4, 0.66),
+            d6: new size(6, 1.0),
+            d8: new size(8, 1.33),
+            d10: new size(10, 1.66),
+            d12: new size(12, 2.0),
+        }
+
+
+
+    function makeCard(unit={}){
+        //this div holds the whole card.
+        var card_div = document.createElement('div');
+        card_div.style = "width:320px; height: 400px; display: inline-block; position: relative; margin: 1em;"
+        var bg_img_holder = document.createElement('span');
+        bg_img_holder.style = 'position: absolute; top: 0px; left: 0px; width: 100%; height: 100%;'
+        var top_img = document.createElement('img');
+        top_img.src = 'img/top.png';
+        top_img.style = 'width: inherit;';
+        var mid_img = document.createElement('img');
+        mid_img.src = "img/slice.png";
+        mid_img.style=`
+                position: absolute;
+                top: 25px;
+                bottom: -25px;
+                left: 0px;
+                width: inherit;
+                height: 90%;
+                margin: -10px 0 0 0;
+            `;
+
+        bottom_img = document.createElement('img');
+        bottom_img.src = 'img/bottom.png';
+        bottom_img.style = 'width: inherit; position: absolute; bottom: 0px; left: 0px;';
+
+        bg_img_holder.appendChild(top_img);
+        bg_img_holder.appendChild(mid_img);
+        bg_img_holder.appendChild(bottom_img);
+        card_div.appendChild(bg_img_holder);
+
+
+        var unit_name_holder = document.createElement('div');
+        unit_name_holder.style = `
+                width: 200px;
+                position: absolute;
+                top: 40px;
+                left: 90px;
+                border-bottom: 1px solid black;
+                color: red;
+                font-family: helvetica;
+                font-size: 1em;
+                font-weight: 600;
+                padding: 0 0 3px 0;
+            `;
+        var unit_name = document.createTextNode(unit.name.toUpperCase());
+        unit_name_holder.appendChild(unit_name);
+        card_div.appendChild(unit_name_holder);
+
+        //stores ancestory, experience, equipment, and unit type.
+        var unit_aspects_holder = document.createElement('div');
+        unit_aspects_holder.style = `
+                width: 200px;
+                position: absolute;
+                top: 25px;
+                left: 0px;
+                color: darkred;
+                font-family: helvetica;
+                font-size: 0.75em;
+                font-weight: 800;
+            `;
+        unit_aspects_holder.innerHTML = unit.ancestory.name.toUpperCase() + ' ' + unit.experience.name.toUpperCase() + ' ' + '<br>' + unit.equipment.name.toUpperCase() + ' ' + unit.unit_type.name.toUpperCase();
+        unit_name_holder.appendChild(unit_aspects_holder);
+
+        var stats_table = document.createElement('table');
+        //three rows, four columns.
+        // ATTACK (ATK BONUS) DEFENSE (DEF TOTAL)
+        // POWER (POW BONUS) TOUGHNESS (TOUGH TOTAL)
+        // MORALE (MORALE BONUS) SIZE (UNIT SIZE)
+        //attaching to the mid_img div.
+        stats_table.style = `
+                position: absolute;
+                border-top: 1px solid black;
+                border-collapse: collapse;
+                top: 125px;
+                left: 30px;
+                width: 80%;
+                color: red;
+                font-family: helvetica;
+                font-size: 0.75em;
+                font-weight: 600;
+            `;
+
+        var atk = unit.atk;
+        if (unit.atk > 0) atk = '+'+unit.atk;
+        else if (unit.atk < 0) atk = '+'+unit.atk;
+        var row1 = ['ATTACK:', atk, 'DEFENSE:', unit.def];
+
+        var pow = unit.pow;
+        if (unit.pow > 0) pow = '+'+unit.pow;
+        else if (unit.pow < 0) pow = '-'+unit.pow;
+        var row2 = ['POWER:', pow, 'TOUGHNESS:', unit.tough];
+
+        var morale = unit.morale;
+        if (unit.morale > 0) morale = '+'+unit.morale;
+        else if (unit.morale < 0) morale = '-'+unit.morale;
+        var row3 = ['MORALE:', morale, 'SIZE:', '1d'+unit.size.size];
+        var table_contents = [row1, row2, row3];
+        for (var i = 0; i < table_contents.length; i++){
+            tr = document.createElement('tr');
+            tr.style = 'border-bottom: 1px solid black;';
+            row_contents = table_contents[i];
+            for (var j = 0; j < row_contents.length; j++){
+                td_string = row_contents[j];
+                td = document.createElement('td');
+
+                if (j == 2){
+                    td.style = 'padding: 0 0 0 20px;';
+                }
+                td.innerHTML = td_string;
+                tr.appendChild(td);
+            }
+            stats_table.appendChild(tr);
+        }
+        card_div.appendChild(stats_table);
+
+        if (unit.traits.length + unit.orders.length > 0){
+            var holder = document.createElement('span');
+            holder.style = `
+                    position: absolute;
+                    top: 185px;
+                    left: 30px;
+                `;
+            tno = [unit.traits, unit.orders]; //traits and orders
+            for (var i = 0; i < tno.length; i++){
+                label = document.createElement('div');
+                label.style = `
+                    color: red;
+                    font-family: helvetica;
+                    font-size: 0.75em;
+                    font-weight: 600;
+                `;
+                contents = tno[i];
+                if (i == 0 && contents.length > 0){
+                    label.innerHTML = 'TRAITS';
+                }else if (contents.length > 0){
+                    label.innerHTML = 'ORDERS';
+                }
+
+                holder.appendChild(label);
+                for (var j = 0; j < contents.length; j++){
+                    var content = contents[j];
+                    var content_div = document.createElement('div');
+                    content_div.style = `
+                            margin: 0 0 1em 0;
+                            padding: 0 2em 0 0;
+                            font-family: helvetica;
+                            font-size: 0.75em;
+                        `;
+                    var name_span = document.createElement('span');
+                    name_span.style = 'color: darkred; font-weight: 600; margin: 0 .5em 0 0;';
+                    name_span.innerHTML = content.name;
+                    var desc_span = document.createElement('span');
+                    desc_span.style = 'color: red; font-weight: 300;';
+                    desc_span.innerHTML = content.desc;
+                    content_div.appendChild(name_span);
+                    content_div.appendChild(desc_span);
+                    holder.appendChild(content_div);
+                }
+            }
+
+            card_div.appendChild(holder);
+        }
+
+
+
+        var body = document.getElementsByTagName("body")[0];
+
+        body.appendChild(card_div);
+    }
+
+
+    var bugbear = new unit('Bugbear Pike', ancestories.bugbear, exp.green, equip.medium, unit_types.infantry, unit_sizes.d6, []);
+    var human = new unit("Roger's Regulars", ancestories.human, exp.regular, equip.medium, unit_types.infantry, unit_sizes.d6, []);
+    var kobold = new unit("Iguana Cavalry", ancestories.kobold, exp.elite, equip.medium, unit_types.cavalry, unit_sizes.d4, []);
+    var ghoul = new unit("Dread Archers", ancestories.ghoul, exp.super_elite, equip.heavy, unit_types.archers, unit_sizes.d8, []);
+
+
+    makeCard(bugbear);
+    makeCard(human);
+    makeCard(kobold);
+    makeCard(ghoul);
+	</script>
+
+
+</body>
+</html>
